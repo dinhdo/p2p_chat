@@ -1,4 +1,4 @@
 p2p_chat
 ========
 
-Networks: Project 3
+By: Dinh Do & Kim Ngo
