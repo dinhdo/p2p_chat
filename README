@@ -4,3 +4,30 @@ CSE 30264 - Networks
 Project 3c
 
 By: Dinh Do & Kim Ngo
+
+LIST SERVER:
+	read "L" (1 char)
+	write string of groups with ":" delimiter and trailing ":"
+
+JOIN SERVER:
+	read "J" (1 char)
+	read group_name:username:
+	write "S", "G", "U"
+		S to notify client successful join (group exists and new username)
+		G to notify client successful join (group didn't exists, but now exists, and new username)
+		U to notify client username is already taken for that group
+
+LEAVE SERVER:
+	read "X" (1 char)
+	read group_name:username:
+
+MESSAGE SERVER:
+	read "T" (1 char)
+	read group_name:username:
+	read uint32_t // unique message id number
+	read uint32_t message length
+	read message
+	write "S" or "F"
+		S to notify client of successful message sent
+		F to notify client of failure message
+
