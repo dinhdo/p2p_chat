@@ -58,14 +58,80 @@ int list(const int sockfd) {
 }
 
 
-int join(const int sockfd, const char buffer[], char group[], char username[]) {
-	printf("Still needs to implement join()\n");
+// Sends server which group join and with which username
+// Returns 1 if join is successful
+// Returns 0 if join is not successful--due to group doesn't exist or username already taken 
+int join(const int sockfd, char buffer[], char group[], char username[]) {
+	int n;
+	const char delimiter[2] = ":";
+	char *token;
+
+	// Notifies server user trying to join a group
+	if ((n = write(sockfd, "J", 1)) < 0) {
+		fprintf(stderr, "Error writing to socket: join\n");
+		return 0;
+	}
+
+	// Sends intended group to join and username to use
+	if ((n = write(sockfd, buffer, strlen(buffer))) < 0) {
+		fprintf(stderr, "Error writing to socket: join group & username information\n");
+		return 0;
+	}
+	
+	// Receive feedback about join from server
+	// S = success
+	// G = group doesn't exist, group created
+	// U = username already taken
+	char feedback;
+	if ((n = read(sockfd, &feedback, 1)) < 0) {
+		fprintf(stderr, "Error reading from socket: join feedback\n");
+		return 0;
+	}
+	
+	if (feedback == 'S' || feedback == 'G') {
+		// Fill group and username
+		token = strtok(buffer, delimiter);
+		while (token != NULL) {
+			if (strlen(group) == 0) strcpy(group, token);
+			else strcpy(username, token);
+			token = strtok(NULL, delimiter);
+		}
+		if (feedback == 'G') printf("Group %s created.\n", group);
+		return 1;
+
+	// Username already taken
+	} else if (feedback == 'U') {
+		token = strtok(buffer, delimiter);
+		char g[BSIZE], u[BSIZE];
+		while (token != NULL) {
+			if (strlen(group) == 0) strcpy(g, token);
+			else strcpy(u, token);
+			token = strtok(NULL, delimiter);
+		}
+		printf("Username %s is already used in group %s\nJoin with another username.\n", u, g);
+	}
+	return 0;
 }
 
-int leave(const int sockfd, const char group[], const char username[]) {
-	printf("Still needs to implement leave()\n");
-	if (strlen(group) == 0) {
+
+// Sends server which group and username to leave
+// Returns 1 if group and username left
+// Returns 0 if user was not in group
+int leave(const int sockfd, char group[], char username[]) {
+	int n;
 	
+	// Check if user is in group
+	if (strlen(group) == 0 || strlen(username) == 0) {
+		printf("No group to leave.\n");
+		return 0;
+	
+	// Sends server group and username information and clears group and username buffer
+	} else {
+		// Notifies server that user wants to leave group
+		if ((n = write(sockfd, "X", 1)) < 0) {
+			fprintf(stderr, "Error writing to socket: join group & username information\n");
+			return 0;
+		}
 	}
 }
 
@@ -73,7 +139,8 @@ int leave(const int sockfd, const char group[], const char username[]) {
 // Sends server ASCII character "T" to notify server prepare for receiving message
 // Prepends group and username to message being sent
 int message(const int sockfd, const char username[], const char group[], const uint32_t id_num, char message[]) {
-	int n;
+	int n, retry;
+	char response;
 	char msg_id[BSIZE];
 	uint32_t message_len = strlen(message);
 	
@@ -81,35 +148,54 @@ int message(const int sockfd, const char username[], const char group[], const u
 	strcat(msg_id, ":");
 	strcat(msg_id, username);
 	strcat(msg_id, ":");
+	
+	retry = 0;	// Retry sending message maximum of 5 times before failed.
+	
+	// Keeps sending message until success
+	while (response != 'S') {
+	
+		if (retry >= 5) {
+			printf("Message failed to send.\n");
+			return 0;
+		}
 
-	// Notifies server message type
-	if ((n = write(sockfd, "T", 1)) < 0) {
-		fprintf(stderr, "Error writing to socket: message T\n");
-		return 0;
-	}
+		// Notifies server message type
+		if ((n = write(sockfd, "T", 1)) < 0) {
+			fprintf(stderr, "Error writing to socket: message T\n");
+			return 0;
+		}
 
-	// Sends group_name:username:
-	if ((n = write(sockfd, msg_id, strlen(msg_id))) < 0) {
-		fprintf(stderr, "Error writing to socket: message msg_id\n");
-		return 0;
-	}
-	
-	// Sends unique message ID number
-	if ((n = write(sockfd, &id_num, sizeof(uint32_t))) < 0) {
-			fprintf(stderr, "Error writing to socket: message id_num\n");
+		// Sends group_name:username:
+		if ((n = write(sockfd, msg_id, strlen(msg_id))) < 0) {
+			fprintf(stderr, "Error writing to socket: message msg_id\n");
 			return 0;
-	}
+		}
 	
-	// Sends message length
-	if ((n = write(sockfd, &message_len, sizeof(uint32_t))) < 0) {
-			fprintf(stderr, "Error writing to socket: message length\n");
-			return 0;
-	}
+		// Sends unique message ID number
+		if ((n = write(sockfd, &id_num, sizeof(uint32_t))) < 0) {
+				fprintf(stderr, "Error writing to socket: message id_num\n");
+				return 0;
+		}
 	
-	// Sends message
-	if ((n = write(sockfd, message, strlen(message))) < 0) {
-			fprintf(stderr, "Error writing to socket: message\n");
+		// Sends message length
+		if ((n = write(sockfd, &message_len, sizeof(uint32_t))) < 0) {
+				fprintf(stderr, "Error writing to socket: message length\n");
+				return 0;
+		}
+	
+		// Sends message
+		if ((n = write(sockfd, message, strlen(message))) < 0) {
+				fprintf(stderr, "Error writing to socket: message\n");
+				return 0;
+		}
+	
+		// Waits for server response
+		// S for success F for Failure
+		if ((n = read(sockfd, &response, 1)) < 0) {
+			fprintf(stderr, "Error reading from socket: message response\n");
 			return 0;
+		}
+		retry++;
 	}
 	
 	return 1;
